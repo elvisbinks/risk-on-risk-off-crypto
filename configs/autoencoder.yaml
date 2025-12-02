@@ -1,0 +1,21 @@
+encoding_dim: 4        # Size of the bottleneck (latent) representation
+hidden_dims: [8]       # Hidden layer sizes for encoder/decoder
+n_clusters: 2          # Number of KMeans clusters in latent space
+epochs: 100            # Training epochs for the autoencoder
+batch_size: 32         # Mini-batch size for SGD
+learning_rate: 0.001   # Learning rate for the Adam optimizer
+random_state: 42       # Seed for reproducible training and clustering
+# If omitted, will use all features in the features.csv
+features:
+  # Subset of feature columns to use when training the autoencoder
+  - BTC-USD_ret
+  - BTC-USD_vol21
+  - BTC-USD_vol_z60
+  - BTC-USD_corr_spx21
+  - BTC-USD_corr_vix21
+# Example explicit selection:
+# features:
+#   - BTC-USD_ret
+#   - BTC-USD_vol21
+#   - ETH-USD_ret
+#   - ETH-USD_vol21

@@ -1,0 +1,19 @@
+n_states: 2            # Number of hidden regimes (e.g. risk-on, risk-off)
+covariance_type: "full"  # Full covariance per state (most flexible)
+n_iter: 500            # Maximum EM iterations for HMM training
+tol: 0.001             # Convergence tolerance on log-likelihood
+random_state: 42       # Seed for reproducible results
+# If omitted, will use all features in the features.csv
+features:
+  # Subset of feature columns to use when fitting the HMM
+  - BTC-USD_ret
+  - BTC-USD_vol21
+  - BTC-USD_vol_z60
+  - BTC-USD_corr_spx21
+  - BTC-USD_corr_vix21
+# Example explicit selection:
+# features:
+#   - BTC-USD_ret
+#   - BTC-USD_vol21
+#   - ETH-USD_ret
+#   - ETH-USD_vol21

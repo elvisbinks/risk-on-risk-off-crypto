@@ -1,0 +1,20 @@
+n_components: 2         # Number of mixture components / regimes
+covariance_type: "full"  # Covariance structure per component
+n_init: 10              # How many random initialisations to try
+max_iter: 500           # Maximum EM iterations per initialisation
+tol: 0.001              # Convergence tolerance
+random_state: 42        # Seed for reproducible clustering
+features:
+  # Subset of feature columns to use when fitting the GMM
+  - BTC-USD_ret
+  - BTC-USD_vol21
+  - BTC-USD_vol_z60
+  - BTC-USD_corr_spx21
+  - BTC-USD_corr_vix21
+# If omitted, will use all features in the features.csv
+# Example explicit selection:
+# features:
+#   - BTC-USD_ret
+#   - BTC-USD_vol21
+#   - ETH-USD_ret
+#   - ETH-USD_vol21

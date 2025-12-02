@@ -1,0 +1,11 @@
+# Configuration for data download and feature engineering
+start_date: "2016-01-01"  # First date to request from Yahoo Finance
+end_date: null             # If null, yfinance will fetch up to "today"
+interval: "1d"            # Sampling frequency (daily data)
+symbols:
+  # Crypto assets and benchmarks to download from Yahoo Finance
+  - "BTC-USD"
+  - "ETH-USD"
+  - "^GSPC"
+  - "^VIX"
+output_dir: "data/raw"    # Where raw CSV files are stored
