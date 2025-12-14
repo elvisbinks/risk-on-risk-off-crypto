@@ -17,7 +17,6 @@ dependencies:
 
   # PyTorch (conda-forge has optimized builds)
   - pytorch=2.2.2
-  - cpuonly  # Remove this line if you need GPU support
 
   # Testing
   - pytest=8.3.3
