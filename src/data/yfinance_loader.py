@@ -1,116 +1,71 @@
-"""Yahoo Finance data loader for cryptocurrency and traditional market data.
-
-This module provides small helper functions to download price time series
-from Yahoo Finance and persist them as CSV files. The CSVs are then used
-by the feature engineering pipeline.
-"""
-
 from __future__ import annotations
 
-# pathlib gives a convenient, cross-platform way to work with filesystem paths
-import pathlib as _pl
-from typing import Iterable, Optional
+from pathlib import Path
+from typing import Iterable
 
-# pandas for tabular time-series data handling
 import pandas as pd
-
-# yfinance is a thin wrapper around Yahoo Finance HTTP APIs
 import yfinance as yf
 
 
-def _to_path(pathlike: str | _pl.Path) -> _pl.Path:
-    """Convert path-like object to resolved Path and ensure parent directory exists.
-
-    This utility keeps path handling consistent across the project and makes sure
-    parent directories exist before we try to write any CSV files.
-
-    Args:
-        pathlike: String or Path object representing a file path.
-
-    Returns:
-        Resolved absolute Path with parent directory created.
+def _local_csv_path(symbol: str, out_dir: str | Path) -> Path:
     """
+    Build the expected local CSV path for a given symbol.
 
-    # Expand user (~), resolve relative segments, and create parent directories
-    p = _pl.Path(pathlike).expanduser().resolve()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def fetch_ohlcv(symbol: str, start: str, end: Optional[str], interval: str = "1d") -> pd.DataFrame:
-    """Fetch OHLCV (Open, High, Low, Close, Volume) data from Yahoo Finance.
-
-    Args:
-        symbol: Ticker symbol (e.g., 'BTC-USD', '^GSPC', '^VIX').
-        start: Start date in 'YYYY-MM-DD' format.
-        end: End date in 'YYYY-MM-DD' format. If None, fetches until today.
-        interval: Data frequency ('1d' for daily, '1h' for hourly, etc.).
-
-    Returns:
-        DataFrame with OHLCV data indexed by Date.
-
-    Raises:
-        RuntimeError: If no data is returned for the symbol.
-
-    Example:
-        >>> df = fetch_ohlcv('BTC-USD', start='2020-01-01', end='2020-12-31')
-        >>> print(df.head())
+    Handles Yahoo-style tickers like '^GSPC' by mapping to 'GSPC.csv'.
     """
-    # Use yfinance to download OHLCV data for the given symbol and date range.
-    # auto_adjust=False keeps original prices, which is important when comparing
-    # across assets and with other data sources.
-    df = yf.download(
-        symbol, start=start, end=end, interval=interval, auto_adjust=False, progress=False
-    )
-    # Guard against cases where Yahoo returns no data (bad symbol, no history, etc.)
-    if not isinstance(df, pd.DataFrame) or df.empty:
-        raise RuntimeError(f"No data returned for {symbol}")
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fname = symbol.replace("^", "")  # ^GSPC -> GSPC, ^VIX -> VIX
+    return out_dir / f"{fname}.csv"
 
-    # Normalise column names so downstream code can rely on canonical labels
-    # such as 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'.
-    df = df.rename(columns=str.title)
 
-    # Set a consistent index name so joins on 'Date' are easy later
-    df.index.name = "Date"
+def _load_local_csv(path: Path) -> pd.DataFrame:
+    """Load a local CSV and ensure a datetime index when possible."""
+    df = pd.read_csv(path)
+
+    # Try common date column names
+    for col in ("Date", "date", "Datetime", "datetime"):
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col])
+            df = df.set_index(col)
+            break
+
     return df
 
 
 def download_and_save(
     symbols: Iterable[str],
-    start: str,
-    end: Optional[str],
-    interval: str,
-    out_dir: str | _pl.Path,
+    start: str | None = None,
+    end: str | None = None,
+    interval: str = "1d",
+    out_dir: str | Path = "data/raw",
 ) -> None:
-    """Download OHLCV data for multiple symbols and save to CSV files.
-
-    Args:
-        symbols: Iterable of ticker symbols to download.
-        start: Start date in 'YYYY-MM-DD' format.
-        end: End date in 'YYYY-MM-DD' format. If None, fetches until today.
-        interval: Data frequency ('1d' for daily, '1h' for hourly, etc.).
-        out_dir: Output directory path where CSV files will be saved.
-
-    Note:
-        Symbols starting with '^' (e.g., '^GSPC') will have the caret removed
-        in the filename (e.g., 'GSPC.csv').
-
-    Example:
-        >>> symbols = ['BTC-USD', 'ETH-USD', '^GSPC', '^VIX']
-        >>> download_and_save(symbols, '2020-01-01', None, '1d', 'data/raw')
     """
-    # Ensure output directory exists before writing any CSV files
-    out = _pl.Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
+    Download market data for symbols and save to CSV.
+
+    Offline-first behavior:
+    - If a local CSV already exists for a symbol, it is reused and no Yahoo call is made.
+    - If it doesn't exist, we try Yahoo. If Yahoo fails/empty -> raise a clear error.
+    """
     for sym in symbols:
-        # Download data for each symbol in turn. If a symbol fails, fetch_ohlcv
-        # will raise, which is usually preferable to silently skipping it.
-        df = fetch_ohlcv(sym, start=start, end=end, interval=interval)
+        csv_path = _local_csv_path(sym, out_dir)
 
-        # Yahoo Finance uses the caret (^) to mark indices, but filesystem
-        # paths typically do not, so we drop it from the filename.
-        out_path = out / f"{sym.replace('^','')}.csv"
+        # ✅ OFFLINE FIRST: reuse local CSV if present
+        if csv_path.exists() and csv_path.stat().st_size > 0:
+            print(f"✅ Using existing local CSV for {sym}: {csv_path}")
+            # Optional: sanity check that file is readable
+            _ = _load_local_csv(csv_path)
+            continue
 
-        # Persist the clean OHLCV data for later use by feature engineering.
-        df.to_csv(out_path)
-        print(f"Saved {sym} -> {out_path}")
+        # Otherwise try to download from Yahoo (optional but kept for completeness)
+        print(f"📥 Downloading {sym} from Yahoo Finance...")
+        df = yf.download(sym, start=start, end=end, interval=interval, progress=False)
+
+        if df is None or df.empty:
+            raise RuntimeError(
+                f"No data returned for {sym} from Yahoo Finance, and no local CSV found at {csv_path}. "
+                f"Please place a CSV file at {csv_path} to run offline."
+            )
+
+        df.to_csv(csv_path)
+        print(f"✅ Saved {sym} to {csv_path}")
