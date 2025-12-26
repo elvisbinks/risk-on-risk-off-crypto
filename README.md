@@ -7,6 +7,13 @@ Can unsupervised learning identify Risk-On and Risk-Off regimes in crypto market
 
 ## Setup
 
+## Clone the Repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/risk-on-risk-off-crypto.git
+cd risk-on-risk-off-crypto
+```
+
 ### Option 1: Using Conda (Recommended)
 ```bash
 conda env create -f environment.yml
