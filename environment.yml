@@ -18,10 +18,7 @@ dependencies:
 
   # Modeling libraries
   - hmmlearn=0.3.0
-  # Torch installed via pip to avoid strict channel issues on Nuvolos
-  - pip
-  - pip:
-      - torch==2.2.2
+  - pytorch-cpu=2.2.*
 
   # Data and visualization utilities
   - yfinance=0.2.40
