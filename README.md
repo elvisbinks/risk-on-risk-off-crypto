@@ -9,25 +9,19 @@ Can unsupervised learning identify Risk-On and Risk-Off regimes in crypto market
 
 ### Option 1: Using Conda (Recommended)
 ```bash
-# Create environment
 conda env create -f environment.yml
 conda activate risk-on-risk-off-crypto
 ```
 
 ### Option 2: Using venv + pip
 ```bash
-# Create virtual environment
 python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
+source .venv/bin/activate  
 pip install -r requirements.txt
 ```
-
 ## Usage
 
 ```bash
-# Run full pipeline (data download, feature engineering, model training, evaluation)
 python main.py
 ```
 

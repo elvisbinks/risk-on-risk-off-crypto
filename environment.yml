@@ -1,6 +1,7 @@
 name: risk-on-risk-off-crypto
 channels:
   - conda-forge
+  - pytorch
   - defaults
 dependencies:
   # Python version
@@ -15,20 +16,23 @@ dependencies:
   - seaborn=0.13.2
   - statsmodels=0.14.2
 
+  # Modeling libraries
+  - hmmlearn=0.3.0
+  # Torch installed via pip to avoid strict channel issues on Nuvolos
+  - pip
+  - pip:
+      - torch==2.2.2
+
+  # Data and visualization utilities
+  - yfinance=0.2.40
+  - plotly=5.24.1
+
   # Testing
   - pytest=8.3.3
   - pytest-cov=5.0.0
 
-  # Code quality
+  # Code quality (optional)
   - black=24.3.0
   - flake8=7.1.0
   - mypy=1.10.0
   - isort=5.13.2
-
-  # Pip-only dependencies (not available in conda)
-  - pip
-  - pip:
-      - yfinance==0.2.40
-      - hmmlearn==0.3.0
-      - plotly==5.24.1
-      - torch==2.2.2
