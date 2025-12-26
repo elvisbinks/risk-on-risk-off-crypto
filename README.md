@@ -18,6 +18,14 @@ cd risk-on-risk-off-crypto
 ```bash
 conda env create -f environment.yml
 conda activate risk-on-risk-off-crypto
+#**⚠️ IMPORTANT: PyTorch must be installed manually via pip (see step below)**
+# Install PyTorch via pip 
+pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+```
+## Usage
+
+```bash
+python main.py
 ```
 
 ### Option 2: Using venv + pip
