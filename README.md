@@ -45,7 +45,21 @@ python main.py
 - Visualizations saved to `results/figures/` (PNG files)
 - Console output showing regime statistics and model comparison
 
-## Project Structure
+### Running the notebook
+
+```bash
+## To run the notebook correctly, make sure to use the Conda environment
+`risk-on-risk-off-crypto` as the Jupyter kernel.
+
+## After activating the environment:
+
+conda activate risk-on-risk-off-crypto
+
+## Open the notebook regime_analysis_clean.ipynb located in the notebooks/ directory and select the following kernel:
+
+risk-on-risk-off-crypto (Python 3.11.14)
+```
+# Project Structure
 
 ```
 risk-on-risk-off-crypto/
