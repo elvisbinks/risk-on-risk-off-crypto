@@ -1,9 +1,10 @@
 % Advanced Programming 2025 - Project Report Template
 % HEC Lausanne / UNIL
 \documentclass[11pt,a4paper]{article}
-
+\setlength{\parindent}{0pt}
 % Packages
 \usepackage[utf8]{inputenc}
+\usepackage{microtype}
 \usepackage[T1]{fontenc}
 \usepackage[english]{babel}
 \usepackage{amsmath,amssymb,amsthm}
@@ -50,22 +51,22 @@
 % Header and footer
 \pagestyle{fancy}
 \fancyhf{}
-\rhead{Advanced Programming 2025}
+\rhead{Data Science and Advanced Programming 2025}
 \lhead{Project Report}
 \rfoot{Page \thepage}
 
 % Title page information - MODIFY THESE
 \title{%
-    \Large \textbf{Advanced Programming 2025} \\
+    \Large \textbf{Data Science and Advanced Programming 2025} \\
     \vspace{0.5cm}
-    \LARGE \textbf{Your Project Title Here} \\
+    \LARGE \textbf{Detecting Risk-On and Risk-Off Regimes in Crypto Markets: A Comparative Modeling Approach} \\
     \vspace{0.3cm}
     \large Final Project Report
 }
 \author{
-    Your Name \\
-    \texttt{your.email@unil.ch} \\
-    Student ID: 12345678
+    Elvis Hoxha \\
+    \texttt{elvis.hoxha@unil.ch} \\
+    Student ID: 22404503
 }
 \date{\today}
 
@@ -75,18 +76,29 @@
 \thispagestyle{empty}
 
 \begin{abstract}
-\noindent
-Provide a concise summary (150-200 words) of your project. Include:
-\begin{itemize}
-    \item The problem you're solving
-    \item Your approach/methodology
-    \item Key results/findings
-    \item Main contributions
-\end{itemize}
+This project addresses the problem of identifying market regimes in cryptocurrency markets, with a
+focus on Bitcoin, in the absence of explicit regime labels. We investigate whether unsupervised
+learning can recover a small number of latent states that summarize changing market conditions and
+can be interpreted through a Risk-On/Risk-Off framework. Using daily data for BTC and ETH together
+with risk proxies (S\&P 500 and VIX) sourced from Yahoo Finance, we engineer features capturing
+returns, rolling volatility, volume dynamics, and cross-asset correlations. We then compare three
+unsupervised methodologies: a Gaussian Hidden Markov Model (HMM) to capture temporal dependence, a
+Gaussian Mixture Model (GMM) for static clustering, and an autoencoder followed by KMeans to learn a
+non-linear latent representation before clustering. Results show that all models separate the sample
+into two regimes with clearly different levels of realized return dispersion, while the HMM produces
+more persistent regime segments and a more stable transition structure than clustering-based
+approaches. The main contributions are an end-to-end Python pipeline for data acquisition, feature
+engineering, regime inference, and evaluation, along with a comparative analysis using
+regime-conditional statistics, regime timelines, and transition-count matrices.
 \end{abstract}
 
-\vspace{0.5cm}
-\noindent\textbf{Keywords:} data science, Python, machine learning, [add your keywords]
+\noindent\textbf{Keywords:} data science, Python, machine learning, unsupervised learning, market regime detection, cryptocurrency, Hidden Markov Model, Gaussian Mixture Model, autoencoder, Risk-On/Risk-Off
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{project_report.tex/results/figures/IMG_2191.PNG}
+    \label{fig:condreturns}
+\end{figure}
 
 \newpage
 \tableofcontents
@@ -97,156 +109,496 @@ Provide a concise summary (150-200 words) of your project. Include:
 \section{Introduction}
 \label{sec:introduction}
 
-Introduce your project and its context. This section should include:
-\begin{itemize}
-    \item Background and motivation
-    \item Problem statement
-    \item Objectives and goals
-    \item Report organization
-\end{itemize}
+In financial markets, the terms Risk-On and Risk-Off refer to broad market regimes characterized
+by changes in investors’ risk appetite. A Risk-On environment denotes periods in which investors
+are willing to take risk and allocate more capital to assets perceived as riskier (e.g., equities or
+cryptoassets), often in search of higher returns. Conversely, a Risk-Off environment corresponds
+to periods of heightened risk aversion and market stress, during which investors tend to reduce
+exposure to risky assets, prefer liquidity, and reallocate toward assets perceived as safer. While
+Risk-On/Risk-Off does not represent a formal binary state and may vary across asset classes, it is
+commonly associated with systematic differences in market behavior, most notably higher realized
+volatility and more unstable return dynamics during Risk-Off episodes, versus more stable conditions
+during Risk-On periods. In this project, these notions are used as an interpretative framework for
+the regimes inferred from market data using unsupervised models.\medskip
+
+Cryptocurrency markets, and Bitcoin in particular, are known for pronounced volatility, sudden
+drawdowns, and changing correlations with traditional assets. For investors and risk managers, these
+shifts matter because they influence the risk profile of portfolios and can affect the performance
+of allocation or hedging decisions. This motivates the use of data-driven, unsupervised regime
+detection methods to summarize market conditions into a small number of recurring latent states.
+
+\subsection{Problem statement} Despite the intuitive appeal of regime narratives, market regimes are not
+directly observed and there is no universally accepted ground-truth label for Risk-On/Risk-Off in
+crypto. The problem addressed in this project is therefore to determine whether unsupervised
+learning methods can infer a small number of latent regimes from historical market data, and whether
+these regimes exhibit economically meaningful differences in return and risk characteristics.
+
+\subsection{Objectives and goals} The objectives of this project are: (i) to build a reproducible
+pipeline that downloads daily market data (BTC, ETH, and risk proxies such as SPX and VIX) and
+constructs engineered features capturing returns, volatility, and cross-asset co-movement; (ii) to
+apply and compare three unsupervised regime-detection approaches—Gaussian HMM, Gaussian mixture
+clustering, and an autoencoder followed by KMeans; and (iii) to evaluate the inferred regimes using
+diagnostic tools appropriate for an unsupervised setting, including regime-conditional return
+statistics, regime timelines, and transition-count matrices. Throughout, Risk-On/Risk-Off is used as
+an interpretative framework rather than a claimed ground truth.
+
+\subsection{Report organization} The remainder of the report is structured as follows. Section~2 reviews
+related work on market regime modelling and unsupervised methods. Section~3 presents the dataset and
+feature engineering choices and describes the three modelling approaches. Section~4 reports the main
+empirical results and visual diagnostics. Section~5 discusses what worked well, key challenges,
+limitations, and future directions, and Section~6 concludes.
 
 \section{Literature Review / Related Work}
-\label{sec:literature}
 
-Discuss relevant prior work, existing solutions, or theoretical background. For data science projects, this might include:
-\begin{itemize}
-    \item Previous approaches to similar problems
-    \item Relevant algorithms or methodologies
-    \item Datasets used in related studies
-\end{itemize}
+\subsection{Market regimes and the Risk-On/Risk-Off concept}
+Financial markets are often described as switching between a small number of latent ``regimes'',
+such as calm growth phases and stress or crisis phases. In practitioner language, these broad
+conditions are frequently referred to as \emph{Risk-On} (higher risk appetite) and \emph{Risk-Off}
+(heightened risk aversion), although the boundaries between regimes are not objectively observed and
+may differ across asset classes. A common empirical signature of regime
+changes is a shift in volatility, correlation structure, and tail risk. To capture such regime dynamics, prior studies have
+typically relied on unsupervised or probabilistic models, such as regime-switching models or
+clustering-based approaches, to infer latent market states from observed financial data.
+
+\subsection{Methodological approaches to regime detection}
+A large body of work models market regimes as latent states that generate observable returns and
+risk indicators. A classical probabilistic approach is the Hidden Markov Model (HMM)[{\ref{ref:hamilton}}], where the
+latent regime follows a Markov chain and observations are emitted conditionally on the regime.
+HMMs are attractive for financial regimes because they explicitly model persistence and transitions
+between states, providing an interpretable transition structure[{\ref{ref:Rabiner}}].
+
+An alternative family of approaches treats regime detection as a clustering problem. Gaussian
+Mixture Models (GMMs)[{\ref{ref:McLachlan}}]. represent the distribution of observations as a mixture of Gaussian components
+and assign each observation to a component based on likelihood. Compared to HMMs, GMMs are static
+(independent across time) and can react more quickly to local changes, but they may also produce
+less temporally coherent regime sequences when the underlying process is strongly autocorrelated.
+
+More recent work explores representation learning for financial time series, using neural networks
+to construct low-dimensional embeddings that capture non-linear structure. Autoencoders learn to
+compress input features into a latent space that preserves information needed for reconstruction.
+Clustering[{\ref{ref:Engle}}]. can then be performed in this latent space (e.g., with KMeans), potentially capturing
+non-linear separations not accessible to linear methods. This pipeline
+typically trades interpretability for flexibility: the latent dimensions are not directly tied to
+economic variables, so regimes often require post-hoc interpretation[{\ref{ref:Bollerslev}}].
+
+\subsection{Regimes in cryptocurrency markets and datasets}
+Cryptocurrency markets exhibit properties that can make regime detection both relevant and
+challenging: high and time-varying volatility, heavy-tailed returns, and frequent structural
+breaks. As a result, regime boundaries may be less stable than in traditional
+assets, and models with strong distributional assumptions (e.g., Gaussian emissions) can be
+misspecified. As a
+consequence, most empirical studies rely on relatively simple but robust datasets, typically based
+on daily price and volume information. Related studies commonly rely on daily OHLCV data and augment it with risk proxies or
+cross-asset information (e.g., equity indices, volatility indices, or macro indicators) to capture
+broader market sentiment. In this project, we follow this line by using
+BTC and ETH returns and volatility features, together with correlation features involving SPX and
+VIX[{\ref{ref:Corbet}}], as inputs for unsupervised regime discovery.
 
 \section{Methodology}
 \label{sec:methodology}
 
 \subsection{Data Description}
-Describe your dataset(s):
-\begin{itemize}
-    \item Source and collection method
-    \item Size and characteristics
-    \item Features/variables
-    \item Data quality issues
-\end{itemize}
+
+The data used in this project originate from publicly available financial time series obtained
+from Yahoo Finance through the \texttt{yfinance}[{\ref{ref:Yahoo Finance}}]. Python library. The data collection process is
+implemented in a dedicated data loader module, which retrieves historical OHLCV data for both
+cryptocurrency assets and market-related indicators. Examples include major crypto assets such
+as Bitcoin and Ethereum, as well as traditional market proxies like the S\&P 500 index and the
+VIX.
+
+For practical and reproducibility reasons, the downloaded data are saved locally as CSV files
+and subsequently used throughout the project. An offline-first data loading strategy is adopted:
+when a local CSV file already exists for a given symbol, it is reused directly and no external
+request to Yahoo Finance is made. Online data retrieval is only triggered if the corresponding
+local file is missing. This design choice ensures that the project can be executed reliably on
+the Nuvolos platform at any time, without depending on external data availability or API
+stability. As a result, all experiments presented in this report are based on fixed, versioned
+datasets stored locally.
+
+Raw time series data are stored in the \texttt{data/raw/} directory, with each file corresponding
+to a specific asset or indicator. Feature engineering is performed in a separate processing step,
+where derived variables such as returns and volatility measures are computed and saved in a
+consolidated feature dataset. All series are aligned on a common time axis, with each observation
+representing a single time period. Minor data quality issues, primarily related to missing values
+at the beginning of certain series, are handled during the preprocessing stage.
 
 \subsection{Approach}
-Detail your technical approach:
-\begin{itemize}
-    \item Algorithms used
-    \item Data preprocessing steps
-    \item Model architecture (if applicable)
-    \item Evaluation metrics
-\end{itemize}
+
+This project detects and compares Risk-On/Risk-Off regimes in crypto markets using an
+unsupervised, model-comparison framework. The goal is not to predict labeled regimes, but to
+infer latent market states from engineered financial features and assess their consistency.
+
+Three complementary algorithms are used. A two-state Hidden Markov Model (Gaussian emissions)
+is applied to capture regime persistence and time-dependent transitions. A two-component
+Gaussian Mixture Model provides a static clustering baseline where observations are assigned
+independently to mixture components. Finally, a non-linear autoencoder learns low-dimensional
+embeddings of the standardized feature space, which are then clustered into two regimes using
+KMeans.
+
+Raw OHLCV data (crypto assets and macro-financial indicators such as the S\&P 500 and the VIX)
+are transformed into model-ready inputs through feature engineering. The resulting feature set
+includes log returns, rolling volatility (21-day window, annualized), rolling correlations with
+benchmark return series, and a rolling z-score of trading volume computed over a 60-day window.
+Rolling windows introduce initial missing values, which are removed during preprocessing. Prior
+to training, features are standardized (zero mean, unit variance) using a dedicated scaler
+fitted on the training sample and reused for inference.
+
+Evaluation focuses on interpretability and robustness rather than predictive accuracy. Regimes
+are assessed via regime-conditional return statistics (mean, standard deviation, and sample
+count of BTC returns), transition-count matrices to characterize regime persistence and
+switching behavior, and cross-model agreement to identify periods of strong consensus versus
+ambiguity. For the GMM, information criteria (AIC/BIC) are additionally reported at fitting
+time to support model inspection and comparison.
 
 \subsection{Implementation}
-Discuss the implementation details:
+
+The project is implemented in \textbf{Python 3.11}. Data manipulation and feature engineering rely on
+\texttt{pandas} and \texttt{numpy}. Model training uses three main libraries: \texttt{hmmlearn}
+for the Gaussian Hidden Markov Model, \texttt{scikit-learn} for the Gaussian Mixture Model,
+KMeans clustering, and standardization (\texttt{StandardScaler}), and \texttt{PyTorch} for the
+autoencoder neural network. Visualizations and reporting are produced with
+\texttt{matplotlib} and \texttt{seaborn}. Configuration is handled through YAML files
+(\texttt{pyyaml}), and intermediate outputs are stored as CSV files[{\ref{ref:Pedregosa}}].
+
+\medskip
+The implementation follows a modular pipeline structure:
+(i) raw data ingestion, (ii) feature engineering, (iii) model training/inference,
+and (iv) evaluation and plotting. Each stage writes its outputs to disk so that the full
+workflow can be executed reliably in offline environments. Raw time series are stored in
+\texttt{data/raw/}, engineered features are stored in \texttt{data/\allowbreak processed/\allowbreak features.csv},
+model regime assignments are exported to \texttt{results/*.csv}, and figures are generated in
+\texttt{results/figures/}. The pipeline can be orchestrated through the main entry point
+(\texttt{main.py}) or by running each stage independently via scripts in \texttt{scripts/}.
+
+\medskip
+Core components are organized as follows:
 \begin{itemize}
-    \item Programming languages and libraries
-    \item System architecture
-    \item Key code components
+    \item \texttt{src/data/yfinance\_loader.py}: data loader responsible for downloading OHLCV
+    time series (when online) and saving them as CSV files.
+    \item \texttt{src/features/build\_features.py}: feature engineering module computing log
+    returns, rolling volatility (21-day, annualized), rolling correlations with benchmark
+    return series, and a rolling volume z-score (60-day window). The final feature matrix is
+    saved to \texttt{data/processed/features.csv}.
+    \item \texttt{src/models/hmm.py}: Gaussian HMM training (\texttt{fit\_hmm}) and decoding
+    (\texttt{decode\_hmm}) using standardized features.
+    \item \texttt{src/models/gmm.py}: GMM fitting (\texttt{fit\_gmm}) and regime prediction
+    (\texttt{predict\_gmm}) using standardized features.
+    \item \texttt{src/models/autoencoder.py}: PyTorch autoencoder training and embedding
+    extraction, followed by KMeans clustering for regime assignment.
+    \item \texttt{src/evaluation/metrics.py} and \texttt{src/evaluation/plots.py}: regime
+    statistics, transition-count matrices, and visualization utilities.
 \end{itemize}
 
-Example code snippet:
-\begin{lstlisting}[caption={Example data preprocessing function}]
-def preprocess_data(df):
-    """
-    Preprocess the input dataframe.
-    
-    Args:
-        df: Input pandas DataFrame
-    
-    Returns:
-        Preprocessed DataFrame
-    """
-    # Remove missing values
-    df = df.dropna()
-    
-    # Normalize numerical features
+\medskip
+Listing~\ref{lst:preprocess} illustrates the standardized preprocessing shared by the three
+models: missing values are removed, then a \texttt{StandardScaler} is fitted on the training
+sample and reused for inference.
+
+\begin{lstlisting}[caption={Shared preprocessing: drop missing values and standardize features}, label={lst:preprocess}]
+def prepare_features(df, feature_cols=None):
+    if feature_cols is None:
+        feature_cols = [c for c in df.columns if c != "Date"]
+
+    X_df = df.loc[:, feature_cols].dropna()
+    idx = X_df.index
+
     scaler = StandardScaler()
-    df[numerical_cols] = scaler.fit_transform(df[numerical_cols])
-    
-    return df
+    X = scaler.fit_transform(X_df.values)
+
+    return X, idx, scaler, tuple(feature_cols)
 \end{lstlisting}
 
 \section{Results}
 \label{sec:results}
 
-Present your findings with appropriate visualizations and tables.
+This section reports the main empirical findings obtained from the engineered feature set and
+the three unsupervised regime detection models (HMM, GMM, and Autoencoder+KMeans). Results are
+presented both qualitatively (timeline plots) and quantitatively (regime-conditional return
+statistics and transition patterns).
 
 \subsection{Experimental Setup}
-Describe your experimental environment:
-\begin{itemize}
-    \item Hardware specifications
-    \item Software versions
-    \item Hyperparameters
-\end{itemize}
+
+\paragraph{Hardware.}
+CPU-only execution; no GPU acceleration; standard consumer hardware; offline-compatible
+pipeline.
+
+\paragraph{Software.}
+Python~3.11; pandas; numpy; scikit-learn; hmmlearn; PyTorch (CPU); matplotlib; seaborn;
+fixed dependency environment.
+
+\paragraph{Hyperparameters and training details.}
+Two regimes; full covariance matrices; maximum 500 EM iterations (HMM, GMM);
+autoencoder latent dimension 4; hidden dimension [8]; 100 epochs; batch size 32;
+learning rate $10^{-3}$; fixed random seed.
 
 \subsection{Performance Evaluation}
 
+Since regime detection is unsupervised and no ground-truth regime labels are available, evaluation focuses on economic interpretability and robustness rather than predictive accuracy. We report regime-conditional BTC return statistics (mean, standard deviation, and sample count) and assess regime persistence using transition-count matrices. Additionally, for the GMM we report information criteria (AIC/BIC), which are derived from the model log-likelihood and penalize model complexity, with lower values indicating a better fit–complexity trade-off. AIC/BIC are reported only for the GMM, as these likelihood-based criteria are readily available for Gaussian mixture models and are not directly applicable to the HMM and autoencoder components in our implementation.
+
+\subsection{Visualizations}
+
+For each model, regime labels (0/1) are arbitrary and are interpreted a posteriori using
+regime-conditional BTC return statistics. In the following, the regime with higher return
+volatility (standard deviation of daily returns) is interpreted as Risk-Off, while the
+lower-volatility regime is interpreted as Risk-On.
+
+In risk-off periods, market uncertainty and risk aversion typically increase, leading to larger
+price swings and thus higher realized volatility. This volatility-based interpretation provides a
+consistent economic meaning to the unsupervised regime labels across models.
+
 \begin{table}[H]
 \centering
-\caption{Model Performance Metrics}
-\label{tab:performance}
-\begin{tabular}{|l|c|c|c|}
+\caption{Regime-conditional BTC return statistics (mean/std/count).}
+\label{tab:regime_stats}
+\begin{tabular}{|l|c|c|c|c|}
 \hline
-\textbf{Model} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} \\
+\textbf{Model} & \textbf{Regime} & \textbf{Mean return} & \textbf{Std. return} & \textbf{Count} \\
 \hline
-Baseline & 0.75 & 0.72 & 0.78 \\
-Your Model & 0.85 & 0.83 & 0.87 \\
+HMM & 0 &  \phantom{-}0.002256 & 0.031929 & 1218 \\
+HMM & 1 & -0.002238 & 0.045104 & 768 \\
+\hline
+GMM & 0 &  \phantom{-}0.000658 & 0.025078 & 1571 \\
+GMM & 1 & -0.000010 & 0.066358 & 415 \\
+\hline
+Autoencoder & 0 & -0.006321 & 0.034353 & 1578 \\
+Autoencoder & 1 &  \phantom{-}0.026972 & 0.038078 & 408 \\
 \hline
 \end{tabular}
 \end{table}
 
-\subsection{Visualizations}
+Across all models, regimes exhibit clear economic differences. In particular, regimes associated with lower mean returns tend to display higher volatility and lower sample counts, consistent with stress or risk-off market conditions
 
-Include relevant plots and figures. For example:
+\subsubsection{Regime timelines}
+Figure~\ref{fig:timelines} displays the inferred regimes over time, overlaid with BTC daily
+log returns. The HMM produces the smoothest regime sequence, reflecting its temporal
+persistence assumption. In contrast, the GMM exhibits more frequent switches because each day
+is clustered independently. The Autoencoder-based regimes typically lie between these two
+extremes, producing fewer one-day flips than the GMM while remaining more reactive than the
+HMM.
 
 \begin{figure}[H]
-\centering
-% \includegraphics[width=0.8\textwidth]{figures/results_plot.png}
-\caption{Your results visualization}
-\label{fig:results}
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{results/figures/hmm_timeline.png}
+        \caption{HMM}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{results/figures/gmm_timeline.png}
+        \caption{GMM}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{results/figures/autoencoder_timeline.png}
+        \caption{Autoencoder+KMeans}
+    \end{subfigure}
+
+    \caption{Inferred regimes over time (background shading) with BTC returns overlay.}
+    \label{fig:timelines}
 \end{figure}
 
+\subsubsection{Regime-conditional return statistics}
+To quantify how regimes differ economically, we compute regime-conditional statistics of BTC
+returns (mean, standard deviation, and sample count). Figure~\ref{fig:condreturns} summarizes
+the conditional mean returns by regime and model. A stronger separation between regimes
+(indicating distinct return behavior) suggests that the model captures meaningful latent
+market states states with distinct economic characteristics rather than noise.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{results/figures/conditional_returns.png}
+    \caption{Mean BTC returns conditioned on inferred regimes for each model.}
+    \label{fig:condreturns}
+\end{figure}
+
+\subsubsection{Regime persistence and transition behaviour}
+We further analyze regime persistence through transition-count matrices computed from each
+regime sequence. The HMM typically shows stronger diagonal dominance (fewer switches), whereas
+the GMM and Autoencoder transitions reflect more frequent changes in cluster assignment. These differences reflect the underlying modeling assumptions: explicit temporal dependence in the HMM versus independent or representation-based clustering in the GMM and autoencoder
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{results/figures/hmm_transition.png}
+        \caption{HMM.}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{results/figures/gmm_transition.png}
+        \caption{GMM.}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{results/figures/autoencoder_transition.png}
+        \caption{Autoencoder.}
+    \end{subfigure}
+    \caption{Transition-count matrices for the three models.}
+    \label{fig:transitions}
+\end{figure}
+
+\subsection{Clustering visualization in PCA space}
+Figure 4 visualizes the two inferred regimes in a 2D PCA projection of the engineered feature
+space. Across models, the two labels show partial separation but substantial overlap, which is
+expected given the noisy nature of daily crypto returns and the information loss from projecting
+a high-dimensional space into two components. Importantly, PCA plots are used here as a
+qualitative diagnostic of clustering structure rather than as a definitive measure of regime quality
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{results/figures/clustering.png}
+    \caption{PCA projection (PC1--PC2) of the engineered feature space, colored by inferred regimes for each model (HMM, GMM, Autoencoder+KMeans).}
+    \label{fig:pca_clustering}
+\end{figure}
 \section{Discussion}
 \label{sec:discussion}
 
-Analyze and interpret your results:
-\begin{itemize}
-    \item What worked well?
-    \item What were the challenges?
-    \item How do your results compare to expectations?
-    \item Limitations of your approach
+\subsection{What worked well}
+Several elements worked well and produced interpretable results. First, the regime-conditional BTC
+return statistics provide a simple and transparent way to interpret otherwise arbitrary unsupervised
+labels. Across models, the inferred regimes consistently separate into two distinct market states
+characterized by different levels of return dispersion, supporting the idea that the methods capture
+meaningful market conditions rather than random partitions.
+
+Second, the HMM is well matched to regime analysis because it explicitly models temporal dependence.
+This is reflected in the regime timeline, which appears more coherent, with longer contiguous
+segments, than the clustering-based approaches Figure~\ref{fig:timelines}. The transition-count matrices further support this
+interpretation: the HMM exhibits the strongest diagonal dominance (highest persistence), whereas the
+GMM and autoencoder display more frequent switching, particularly for one of the states Figure~\ref{fig:condreturns}.
+
+Finally, the visual diagnostics—regime timelines overlaid with returns and transition-count
+matrices—proved effective for validating and communicating the results. Together, these figures
+highlight both economic interpretability and temporal structure, providing complementary evidence
+for the presence of distinct market regimes in the BTC market.
+
+\subsection{What were the challenges?}
+
+    The main challenges stem from the unsupervised nature of regime detection and from the application
+of the Risk-On/Risk-Off framework to crypto markets. First, regime labels are inherently arbitrary
+(label switching), meaning that numerical state identifiers (e.g., 0/1) do not carry a fixed meaning
+and may permute across models or across different runs. As a result, regimes must be interpreted
+\emph{a posteriori} using economic diagnostics such as return dispersion and volatility.
+
+Second, the absence of ground-truth regime annotations makes model evaluation non-trivial.
+Validation therefore relies on indirect evidence—such as regime-conditional return statistics,
+persistence patterns, and transition behaviour—rather than standard supervised performance
+metrics.
+
+Third, differences across models reflect both methodological assumptions and sensitivity to
+modelling choices, particularly for clustering-based approaches (GMM and autoencoder + KMeans),
+which tend to produce more frequent regime switches. Finally, the identified regimes depend on the
+chosen feature set and time horizon, which may emphasize specific market properties (e.g.,
+volatility) while under-representing others. These challenges highlight the need to interpret the
+results comparatively rather than relying on a single model output.
+
+\subsection{How do the results compare to expectations?}
+
+   The results are broadly consistent with initial expectations, but they remain limited in
+scope and should be interpreted cautiously. Given the engineered feature set especially rolling
+volatility measures—it is unsurprising that the inferred regimes are primarily differentiated by
+realized return dispersion (\autoref{tab:regime_stats}), which supports a Risk-On/Risk-Off style
+interpretation. However, with a relatively limited set of assets and indicators, the detected
+structure may reflect volatility clustering more than a comprehensive market regime definition.
+
+Regarding model behaviour, the HMM produces more persistent segments in the regime timeline
+(\autoref{fig:app_hmm_timeline}) and stronger diagonal dominance in the transition-count matrix
+(\autoref{fig:transitions}), which is consistent with its Markov assumption. In contrast,
+the GMM and autoencoder switch more frequently (\autoref{fig:app_gmm_timeline}, \autoref{fig:app_ae_timeline}),
+as expected for clustering-based methods, but this also suggests higher sensitivity to short-lived
+fluctuations and modelling choices (e.g., scaling, window lengths, and hyperparameters).
+
+\subsection{Limitations of the approach}
+
+Finally, the imperfect agreement across models indicates that the inferred regimes are not unique:
+each method emphasizes different aspects of the same data, and none can be treated as a definitive
+“ground truth” detector. Taken together, these results provide suggestive evidence of regime-like
+behaviour in BTC returns, but the conclusions remain model-dependent and constrained by the asset
+coverage and feature design of this study.
 \end{itemize}
 
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
 
 \subsection{Summary}
-Summarize your key findings and contributions.
+This project investigated whether unsupervised learning methods can recover meaningful market
+regimes in the BTC market using a small set of engineered risk and return features. We implemented
+three complementary approaches—Gaussian HMM, Gaussian mixture clustering, and an autoencoder with
+KMeans—and evaluated them using regime-conditional return statistics, regime timelines, and
+transition-count matrices.
+
+The models identify two regimes that differ markedly in realized return dispersion,
+supporting an interpretable separation between lower-volatility and higher-volatility market
+conditions. In addition, the HMM tends to produce more persistent regime segments and a more stable
+transition structure, whereas clustering-based approaches exhibit more frequent switching,
+highlighting the importance of explicitly modelling temporal dependence for regime detection.
+
+At the same time, the findings should be interpreted as exploratory. In the absence of ground-truth
+regime labels, evaluation remains indirect, and the detected regimes are strongly influenced by the
+chosen feature set—particularly volatility-related features. Moreover, we did not conduct a
+rigorous out-of-sample or walk-forward validation, nor a trading or risk-management backtest, so the
+practical usefulness of the regimes cannot be concluded from this study alone.
 
 \subsection{Future Directions}
-Suggest potential improvements or extensions:
-\begin{itemize}
-    \item Methodological improvements
-    \item Additional experiments
-    \item Real-world applications
-\end{itemize}
+Methodologically, the approach could be improved by adopting a
+walk-forward (out-of-sample) evaluation framework, performing systematic model selection over the
+number of regimes, and reporting regime stability across random seeds and hyperparameters. Additional
+experiments could include feature ablation studies, testing richer crypto-specific inputs (e.g.,
+funding rates, liquidity measures, on-chain metrics), and comparing against alternative regime models
+(e.g., heavy-tailed emissions or regime-switching volatility models). From an application
+perspective, the inferred regimes could be integrated into real-world workflows such as dynamic risk
+limits, volatility targeting, hedging overlays, or exposure scaling rules, and evaluated through
+transaction-cost-aware backtests.
 
 % ================== REFERENCES ==================
 \newpage
+
 \section*{References}
 \addcontentsline{toc}{section}{References}
 
-% If using biblatex (recommended)
-% \printbibliography[heading=none]
-
-% Or manually:
 \begin{enumerate}
-    \item Author, A. (2024). \textit{Title of Article}. Journal Name, 10(2), 123-145.
-    \item Smith, B. \& Jones, C. (2023). \textit{Book Title}. Publisher.
-    \item Dataset Source. (2024). Dataset Name. Available at: \url{https://example.com}
+    \item\label{ref:hamilton} Hamilton, J. D. (1989). \textit{A New Approach to the Economic Analysis of Nonstationary Time Series and the Business Cycle}. Econometrica, 57(2), 357--384.
+
+    \item\label{ref:Rabiner} Rabiner, L. R. (1989). \textit{A Tutorial on Hidden Markov Models and Selected Applications in Speech Recognition}. Proceedings of the IEEE, 77(2), 257--286.
+
+    \item\label{ref:McLachlan} McLachlan, G., \& Peel, D. (2000). \textit{Finite Mixture Models}. Wiley.
+
+    \item\label{ref:Engle} Engle, R. F. (1982). \textit{Autoregressive Conditional Heteroskedasticity with Estimates of the Variance of United Kingdom Inflation}. Econometrica, 50(4), 987--1007.
+
+    \item\label{ref:Bollerslev} Bollerslev, T. (1986). \textit{Generalized Autoregressive Conditional Heteroskedasticity}. Journal of Econometrics, 31(3), 307--327.
+
+    \item\label{ref:Hinton} Hinton, G. E., \& Salakhutdinov, R. R. (2006). \textit{Reducing the Dimensionality of Data with Neural Networks}. Science, 313(5786), 504--507.
+
+    \item\label{ref:Katsiampa} Katsiampa, P. (2017). \textit{Volatility estimation for Bitcoin: A comparison of GARCH models}. Economics Letters, 158, 3--6.
+
+    \item\label{ref:Corbet} Corbet, S., Meegan, A., Larkin, C., Lucey, B., \& Yarovaya, L. (2018). \textit{Exploring the dynamic relationships between cryptocurrencies and other financial assets}. Economics Letters, 165, 28--34.
+
+    \item\label{ref:Aroussi} Aroussi, R. (2019). \textit{yfinance: Yahoo! Finance market data downloader}. GitHub repository. Available at: \url{https://github.com/ranaroussi/yfinance}.
+
+    \item\label{ref:Yahoo Finance} Yahoo Finance. (n.d.). \textit{Historical market data (BTC-USD, ETH-USD, \^GSPC, \^VIX)}. Available at: \url{https://finance.yahoo.com/}.
+    
+     \item\label{ref:Pedregosa} Pedregosa, F., Varoquaux, G., Gramfort, A., et al. (2011). \textit{Scikit-learn: Machine Learning in Python}. Journal of Machine Learning Research, 12, 2825--2830.
+
 \end{enumerate}
 
 % ================== APPENDICES ==================
+\newpage
+\section*{AI Tool Usage Disclosure}
+\addcontentsline{toc}{section}{AI Tool Usage Disclosure}
+
+\subsection*{ChatGPT}
+ChatGPT was used as a supportive tool to clarify technical concepts related to unsupervised learning
+(e.g., Hidden Markov Models, Gaussian Mixture Models, and autoencoders), assist with debugging, and
+help interpret error messages during development.
+
+\subsection*{Claude Sonnet 4.5}
+Claude Sonnet~4.5 was used to support documentation writing, improve clarity and structure of
+explanations, and suggest refinements to project organization and presentation.
+
+All modelling decisions, implementations, experiments, and interpretations were performed and
+validated by the author. AI tools were used as learning and productivity aids and did not replace
+independent reasoning or original work.
 \newpage
 \appendix
 \section{Additional Figures}
@@ -254,18 +606,180 @@ Suggest potential improvements or extensions:
 
 Include supplementary figures or tables that support but aren't essential to the main narrative.
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{results/figures/hmm_timeline.png}
+    \caption{HMM regime timeline (additional result).}
+    \label{fig:app_hmm_timeline}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{results/figures/gmm_timeline.png}
+    \caption{GMM regime timeline (additional result).}
+    \label{fig:app_gmm_timeline}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{project_report.tex/results/figures/autoencoder_timeline.png}
+    \caption{Autoencoder regime timeline (additional result).}
+    \label{fig:app_ae_timeline}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{project_report.tex/results/figures/reconstruction error.png}
+    \caption{reconstruction error autoencoder (additional result).}
+    \label{fig:app_ae_timeline}
+\end{figure}
+
 \section{Code Repository}
-\label{app:code}
 
-\noindent
-\textbf{GitHub Repository:} \url{https://github.com/yourusername/project-repo}
+\subsection{Repository Information}
 
-\noindent
-Provide information about:
+The complete source code for this project is available on GitHub:
+
+\begin{center}
+\url{https://github.com/elvisbinks/risk-on-risk-off-crypto}
+\end{center}
+
+\subsection{Repository Structure}
+
+The project follows a modular architecture with clear separation of concerns:
+
+\begin{verbatim}
+risk-on-risk-off-crypto/
+├── main.py                    # Main pipeline entry point
+├── src/
+│   ├── data/
+│   │   └── yfinance_loader.py # Data download from Yahoo Finance
+│   ├── features/
+│   │   └── build_features.py  # Feature engineering pipeline
+│   ├── models/
+│   │   ├── hmm.py             # Hidden Markov Model
+│   │   ├── gmm.py             # Gaussian Mixture Model
+│   │   └── autoencoder.py     # Autoencoder + KMeans
+│   └── evaluation/
+│       ├── metrics.py         # Evaluation metrics
+│       └── plots.py           # Visualization functions
+├── scripts/                   # Individual pipeline steps
+│   ├── fetch_data.py
+│   ├── build_features.py
+│   ├── run_hmm.py
+│   ├── run_gmm.py
+│   ├── run_autoencoder.py
+│   └── evaluate_models.py
+├── configs/                   # YAML configuration files
+│   ├── default.yaml           # Data configuration
+│   ├── hmm.yaml               # HMM hyperparameters
+│   ├── gmm.yaml               # GMM hyperparameters
+│   └── autoencoder.yaml       # Autoencoder hyperparameters
+├── data/                      # Data directory (gitignored)
+│   ├── raw/                   # Downloaded OHLCV data
+│   └── processed/             # Engineered features
+├── results/                   # Model outputs (gitignored)
+│   ├── figures/               # Plots and visualizations
+│   ├── hmm_regimes.csv
+│   ├── gmm_regimes.csv
+│   └── autoencoder_regimes.csv
+├── notebooks/                 # Jupyter notebooks
+├── tests/                     # Unit and integration tests
+├── environment.yml            # Conda dependencies
+├── requirements.txt           # pip dependencies
+└── README.md                  # Documentation
+\end{verbatim}
+
+\subsection{Installation Instructions}
+
+\subsubsection{Prerequisites}
 \begin{itemize}
-    \item Repository structure
-    \item Installation instructions
-    \item How to reproduce results
+    \item Python 3.11 or higher
+    \item pip (Python package manager) or Conda/Miniconda
+    \item Internet connection (for data download)
 \end{itemize}
+
+\subsubsection{Setup}
+
+\textbf{Option 1: Using Conda (Recommended)}
+
+\begin{lstlisting}[language=bash]
+# Clone repository
+git clone https://github.com/yourusername/risk-on-risk-off-crypto
+cd risk-on-risk-off-crypto
+
+# Create and activate environment
+conda env create -f environment.yml
+conda activate risk-on-risk-off-crypto
+# IMPORTANT: PyTorch must be installed manually via pip (see step below)
+# Install PyTorch via pip 
+pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+\end{lstlisting}
+
+\textbf{Option 2: Using venv + pip}
+
+\begin{lstlisting}[language=bash]
+# Clone repository
+git clone https://github.com/yourusername/risk-on-risk-off-crypto
+cd risk-on-risk-off-crypto
+
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+\end{lstlisting}
+
+\subsection{How to Reproduce Results}
+
+\subsubsection{Full Pipeline Execution}
+
+To reproduce all results presented in this report, run the main pipeline:
+
+\begin{lstlisting}[language=bash]
+python main.py
+\end{lstlisting}
+
+This single command executes the complete workflow:
+\begin{enumerate}
+    \item \textbf{Data Download}: Fetches historical OHLCV data for BTC-USD, ETH-USD, \^{}GSPC, and \^{}VIX from Yahoo Finance (2016-01-01 to present).
+    \item \textbf{Feature Engineering}: Computes log returns, rolling volatility (21-day window), rolling correlations, and volume z-scores.
+    \item \textbf{Model Training}: Trains three models (HMM, GMM, Autoencoder+KMeans) using configurations in \texttt{configs/}.
+    \item \textbf{Evaluation}: Computes regime statistics, transition matrices, and model agreement metrics.
+    \item \textbf{Visualization}: Generates all figures saved to \texttt{results/figures/}.
+\end{enumerate}
+
+\subsubsection{Step-by-Step Execution}
+
+For more control, individual pipeline steps can be run separately:
+
+\begin{lstlisting}[language=bash]
+# 1. Download data
+python -m scripts.fetch_data --config configs/default.yaml
+
+# 2. Engineer features
+python -m scripts.build_features --config configs/default.yaml
+
+# 3. Train models
+python -m scripts.run_hmm --config configs/hmm.yaml
+python -m scripts.run_gmm --config configs/gmm.yaml
+python -m scripts.run_autoencoder --config configs/autoencoder.yaml
+
+# 4. Evaluate and visualize
+python -m scripts.evaluate_models
+\end{lstlisting}
+
+\subsubsection{Reproducibility Notes}
+
+Reproducibility is supported through fixed random seeds in all models (\texttt{random\_state=42} in configuration files). However, minor numerical differences may still occur across computing environments due to:
+
+\begin{itemize}
+    \item Library versions (scikit-learn, hmmlearn, PyTorch)
+    \item Numerical backends (MKL, OpenBLAS)
+    \item Data source updates (Yahoo Finance may revise historical data)
+\end{itemize}
+
+For strict reproducibility, use the exact software environment specified in \texttt{requirements.txt} or \texttt{environment.yml}, and consider freezing a dataset snapshot with a documented download date.
 
 \end{document}
