@@ -10,7 +10,7 @@ Can unsupervised learning identify Risk-On and Risk-Off regimes in crypto market
 ## Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/risk-on-risk-off-crypto.git
+git clone https://github.com/elvisbinks/risk-on-risk-off-crypto.git
 cd risk-on-risk-off-crypto
 ```
 
